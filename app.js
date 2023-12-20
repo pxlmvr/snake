@@ -1,9 +1,11 @@
 const CANVAS_SIZE = 480
 const TILE_SIZE = 20
-const FPS = 5
+const FPS = 7
 const INTERVAL = 1000 / FPS
 
 let then
+
+let gameover = false
 
 const OPPOSED_DIRECTIONS = {
   U: 'D',
@@ -26,6 +28,8 @@ const snake = [
   { x: 200, y: 240 },
 ]
 
+const fruit = { x: undefined, y: undefined }
+
 let direction = 'R'
 
 const clearCanvas = (ctx) => {
@@ -35,6 +39,7 @@ const clearCanvas = (ctx) => {
 
 const updateScore = () => {
   document.querySelector('#score').innerHTML = score
+  document.querySelector('#length').innerHTML = snake.length
 }
 
 const drawSnake = (ctx, snake) => {
@@ -47,8 +52,22 @@ const drawSnake = (ctx, snake) => {
   })
 }
 
-const moveSnake = (dir, snake) => {
-  snake.pop()
+const drawFruit = (fruit) => {
+  ctx.fillStyle = '#FFF'
+  ctx.strokeStyle = '#000'
+  ctx.fillRect(fruit.x, fruit.y, TILE_SIZE, TILE_SIZE)
+  ctx.strokeRect(fruit.x, fruit.y, TILE_SIZE, TILE_SIZE)
+}
+
+const drawGameOverScreen = (ctx) => {
+  ctx.font = '16px monospace'
+  ctx.fillStyle = '#FFF'
+  ctx.textAlign = 'center'
+  ctx.fillText('Game Over', CANVAS_SIZE / 2, CANVAS_SIZE / 2)
+}
+
+const moveSnake = (dir, snake, grow = false) => {
+  if (!grow) snake.pop()
 
   let newHead = snake[0]
 
@@ -70,6 +89,44 @@ const moveSnake = (dir, snake) => {
   snake.unshift(newHead)
 }
 
+const spawnFruit = (snake) => {
+  let overlapping = true
+  while (overlapping) {
+    fruit.x = Math.floor(Math.random() * (CANVAS_SIZE / TILE_SIZE)) * TILE_SIZE
+    fruit.y = Math.floor(Math.random() * (CANVAS_SIZE / TILE_SIZE)) * TILE_SIZE
+    overlapping = snake.some((tile) => tile.x === fruit.x && tile.y === fruit.y)
+  }
+}
+
+const checkBorderCollision = (snake) => {
+  const head = snake[0]
+
+  if (head.x <= 0 || head.x >= CANVAS_SIZE) {
+    gameover = true
+    return
+  }
+  if (head.y <= 0 || head.y >= CANVAS_SIZE) {
+    gameover = true
+    return
+  }
+
+  if (
+    snake.some(
+      (tile, index) =>
+        snake.findIndex(
+          (t, i) => i !== index && t.x === tile.x && t.y === tile.y
+        ) !== -1
+    )
+  ) {
+    gameover = true
+    return
+  }
+}
+
+const catchesFruit = (snake, fruit) => {
+  return snake[0].x === fruit.x && snake[0].y === fruit.y
+}
+
 const setDirection = (newDir, current) => {
   if (OPPOSED_DIRECTIONS[newDir] !== current) {
     direction = newDir
@@ -77,7 +134,7 @@ const setDirection = (newDir, current) => {
 }
 
 document.addEventListener('keydown', (e) => {
-  e.preventDefault()
+  if (e.key !== 'r') e.preventDefault()
   switch (e.key) {
     case 'ArrowUp':
     case 'Up':
@@ -98,6 +155,9 @@ document.addEventListener('keydown', (e) => {
   }
 })
 
+// Initialize first fruit position
+spawnFruit(snake)
+
 const tick = (timestamp) => {
   requestAnimationFrame(tick)
 
@@ -110,10 +170,25 @@ const tick = (timestamp) => {
   if (delta > INTERVAL) {
     then = timestamp - (delta % INTERVAL)
 
-    clearCanvas(ctx)
-    updateScore()
-    drawSnake(ctx, snake)
-    moveSnake(direction, snake)
+    if (gameover) {
+      clearCanvas(ctx)
+      drawGameOverScreen(ctx)
+    } else {
+      const catches = catchesFruit(snake, fruit)
+
+      clearCanvas(ctx)
+
+      if (catches) {
+        score += 100
+        spawnFruit(snake)
+      }
+
+      updateScore()
+      drawFruit(fruit)
+      drawSnake(ctx, snake)
+      moveSnake(direction, snake, catches)
+      checkBorderCollision(snake)
+    }
   }
 }
 
